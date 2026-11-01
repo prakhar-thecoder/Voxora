@@ -7,7 +7,7 @@ name = "voxora"
 version = "0.1.0"
 description = "A microphone-based Python speech-to-text SDK."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "Voxora contributors" }]
 classifiers = [
@@ -16,7 +16,10 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
 ]
-dependencies = []
+dependencies = [
+    "PyAudio>=0.2.13",
+    "webrtcvad-wheels>=2.0.14.post1",
+]
 
 [project.optional-dependencies]
 dev = [
