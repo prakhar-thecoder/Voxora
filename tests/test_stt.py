@@ -15,6 +15,171 @@ def test_public_import_and_defaults(monkeypatch):
     assert stt.config.api_key == "env-key"
 
 
+def test_vad_workflow_returns_groq_transcript(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "key")
+    class Recorder:
+        def __init__(self, config, logger):
+            pass
+        def record_vad(self):
+            from voxora.audio import AudioResult
+            return AudioResult(b"audio", 16000)
+
+    class Transcriber:
+        def __init__(self, api_key):
+            self.api_key = api_key
+        def transcribe(self, audio, *, model, language=None):
+            assert model == "whisper-test"
+            assert language == "en"
+            return "spoken text"
+
+    monkeypatch.setattr("voxora.stt.AudioRecorder", Recorder)
+    monkeypatch.setattr("voxora.stt.GroqTranscriber", Transcriber)
+    stt = STT(stt_model="whisper-test", language="en")
+    assert stt.listen() == "spoken text"
+    assert stt._state is _State.COMPLETED
+
+
+def test_manual_workflow_returns_groq_transcript(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "key")
+    class Recorder:
+        def __init__(self, config, logger):
+            pass
+        def open(self):
+            pass
+        def record_manual(self, stop_event):
+            stop_event.wait(1)
+            from voxora.audio import AudioResult
+            return AudioResult(b"audio", 16000)
+
+    class Transcriber:
+        def __init__(self, api_key):
+            pass
+        def transcribe(self, audio, *, model, language=None):
+            return "manual text"
+
+    monkeypatch.setattr("voxora.stt.AudioRecorder", Recorder)
+    monkeypatch.setattr("voxora.stt.GroqTranscriber", Transcriber)
+    stt = STT(vad=False)
+    stt.start()
+    assert stt.stop() == "manual text"
+    assert stt._state is _State.COMPLETED
+
+
+def test_stt_reuses_one_groq_transcriber(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "key")
+    instances = []
+
+    class Transcriber:
+        def __init__(self, api_key):
+            instances.append(self)
+        def transcribe(self, audio, *, model, language=None):
+            return "text"
+
+    monkeypatch.setattr("voxora.stt.GroqTranscriber", Transcriber)
+    from voxora.audio import AudioResult
+    stt = STT()
+    assert stt._transcribe_audio(AudioResult(b"audio", 16000)) == "text"
+    assert stt._transcribe_audio(AudioResult(b"audio", 16000)) == "text"
+    assert len(instances) == 1
+
+
+def test_concurrent_transcription_initialization_creates_one_transcriber(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "key")
+    constructed = threading.Event()
+    allow_construct = threading.Event()
+    instances = []
+
+    class Transcriber:
+        def __init__(self, api_key):
+            instances.append(self)
+            constructed.set()
+            assert allow_construct.wait(1)
+        def transcribe(self, audio, *, model, language=None):
+            return "text"
+
+    monkeypatch.setattr("voxora.stt.GroqTranscriber", Transcriber)
+    from voxora.audio import AudioResult
+    stt = STT()
+    results = []
+    first = threading.Thread(target=lambda: results.append(stt._transcribe_audio(AudioResult(b"audio", 16000))))
+    second = threading.Thread(target=lambda: results.append(stt._transcribe_audio(AudioResult(b"audio", 16000))))
+    first.start()
+    assert constructed.wait(1)
+    second.start()
+    allow_construct.set()
+    first.join(1)
+    second.join(1)
+    assert results == ["text", "text"]
+    assert len(instances) == 1
+
+
+def test_vad_provider_failure_clears_session_and_allows_reuse(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "key")
+
+    class Recorder:
+        def __init__(self, config, logger):
+            pass
+        def record_vad(self):
+            from voxora.audio import AudioResult
+            return AudioResult(b"audio", 16000)
+
+    class Transcriber:
+        calls = 0
+        def __init__(self, api_key):
+            pass
+        def transcribe(self, audio, *, model, language=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("provider failure")
+            return "reused transcript"
+
+    monkeypatch.setattr("voxora.stt.AudioRecorder", Recorder)
+    monkeypatch.setattr("voxora.stt.GroqTranscriber", Transcriber)
+    stt = STT()
+    with pytest.raises(RuntimeError, match="provider failure"):
+        stt.listen()
+    assert stt._state is _State.FAILED
+    assert stt._recorder is None and stt._audio_result is None and stt._active_session is None
+    assert stt.listen() == "reused transcript"
+    assert stt._state is _State.COMPLETED
+
+
+def test_manual_provider_failure_clears_session_and_worker_before_reuse(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "key")
+
+    class Recorder:
+        def __init__(self, config, logger):
+            pass
+        def open(self):
+            pass
+        def record_manual(self, stop_event):
+            stop_event.wait(1)
+            from voxora.audio import AudioResult
+            return AudioResult(b"audio", 16000)
+
+    class Transcriber:
+        calls = 0
+        def __init__(self, api_key):
+            pass
+        def transcribe(self, audio, *, model, language=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("provider failure")
+            return "reused transcript"
+
+    monkeypatch.setattr("voxora.stt.AudioRecorder", Recorder)
+    monkeypatch.setattr("voxora.stt.GroqTranscriber", Transcriber)
+    stt = STT(vad=False)
+    stt.start()
+    with pytest.raises(RuntimeError, match="provider failure"):
+        stt.stop()
+    assert stt._state is _State.FAILED
+    assert stt._recorder is None and stt._worker is None and stt._audio_result is None
+    stt.start()
+    assert stt.stop() == "reused transcript"
+    assert stt._worker is None and stt._state is _State.COMPLETED
+
+
 def test_explicit_key_wins(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "env-key")
     assert STT(api_key="explicit").config.api_key == "explicit"
@@ -87,12 +252,12 @@ def test_workflow_restrictions(monkeypatch):
 
     monkeypatch.setattr("voxora.stt.AudioRecorder", FakeRecorder)
     vad = STT()
+    vad._transcribe_audio = lambda result: "text"
     with pytest.raises(ValueError):
         vad.start()
     with pytest.raises(ValueError):
         vad.stop()
-    with pytest.raises(NotImplementedError):
-        vad.listen()
+    assert vad.listen() == "text"
 
     manual = STT(vad=False)
     with pytest.raises(ValueError):
@@ -118,11 +283,11 @@ def test_start_launches_worker_and_stop_reaches_transcription_boundary(monkeypat
 
     monkeypatch.setattr("voxora.stt.AudioRecorder", FakeRecorder)
     stt = STT(vad=False)
+    stt._transcribe_audio = lambda result: "text"
     stt.start()
     assert stt._state is _State.RECORDING
-    with pytest.raises(NotImplementedError):
-        stt.stop()
-    assert stt._state is _State.FAILED
+    assert stt.stop() == "text"
+    assert stt._state is _State.COMPLETED
 
 
 def test_active_state_rejects_repeated_start_and_stop_is_unimplemented(monkeypatch):

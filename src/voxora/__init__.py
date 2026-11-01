@@ -7,6 +7,7 @@ from .exceptions import (
     NoSpeechError,
     RecordingStateError,
     RecordingTimeoutError,
+    TranscriptionError,
     VoxoraError,
 )
 from .stt import STT
@@ -20,4 +21,5 @@ __all__ = [
     "NoSpeechError",
     "RecordingTimeoutError",
     "FormattingError",
+    "TranscriptionError",
 ]

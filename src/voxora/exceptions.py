@@ -27,3 +27,7 @@ class RecordingTimeoutError(VoxoraError):
 
 class FormattingError(VoxoraError):
     """The formatter returned an invalid result."""
+
+
+class TranscriptionError(VoxoraError):
+    """The transcription response was missing or invalid."""

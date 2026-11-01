@@ -15,9 +15,11 @@ from .exceptions import (
     NoSpeechError,
     RecordingStateError,
     RecordingTimeoutError,
+    TranscriptionError,
     VoxoraError,
 )
 from .audio import AudioRecorder, AudioResult
+from .groq import GroqTranscriber
 
 
 class _State(Enum):
@@ -86,6 +88,8 @@ class STT:
         self._worker_error = None
         self._session_generation = 0
         self._active_session = None
+        self._groq_transcriber = None
+        self._groq_init_lock = threading.Lock()
 
     def listen(self) -> str:
         """Record with VAD and reach the Phase 3 transcription boundary."""
@@ -231,5 +235,14 @@ class STT:
                     self._state = _State.FAILED
 
     def _transcribe_audio(self, result: AudioResult) -> str:
-        """Phase 3 boundary; provider transcription is intentionally deferred."""
-        raise NotImplementedError("transcription will be implemented in a later phase")
+        """Transcribe prepared audio through the configured Groq engine."""
+        if self._groq_transcriber is None:
+            with self._groq_init_lock:
+                if self._groq_transcriber is None:
+                    self._groq_transcriber = GroqTranscriber(self.config.api_key)
+        transcriber = self._groq_transcriber
+        return transcriber.transcribe(
+            result,
+            model=self.config.stt_model,
+            language=self.config.language,
+        )
