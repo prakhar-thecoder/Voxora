@@ -8,9 +8,9 @@ from typing import Optional
 from .exceptions import FormattingError
 
 try:
-    from groq import Groq
+    from openai import OpenAI
 except ImportError:  # pragma: no cover - the dependency is declared by Voxora
-    Groq = None
+    OpenAI = None
 
 
 NORMAL_SYSTEM_PROMPT = (
@@ -33,10 +33,10 @@ class TranscriptFormatter:
     def __init__(self, api_key: str, base_url: str, model: str, *, client=None) -> None:
         if client is not None:
             self._client = client
-        elif Groq is not None:
-            self._client = Groq(api_key=api_key, base_url=base_url)
+        elif OpenAI is not None:
+            self._client = OpenAI(api_key=api_key, base_url=base_url)
         else:
-            raise FormattingError("the Groq SDK is required for transcript formatting")
+            raise FormattingError("the OpenAI SDK is required for transcript formatting")
         self._model = model
 
     def format(self, raw_transcript: str) -> str:

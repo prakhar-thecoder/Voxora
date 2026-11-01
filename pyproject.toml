@@ -20,6 +20,7 @@ dependencies = [
     "PyAudio>=0.2.13",
     "webrtcvad-wheels>=2.0.14.post1",
     "groq>=0.31.0",
+    "openai>=1.0.0",
 ]
 
 [project.optional-dependencies]
