@@ -61,6 +61,25 @@ stt.start()
 text = stt.stop()
 ```
 
+Optional formatting can be enabled after Groq transcription. The formatter
+uses the configured compatible chat-completions endpoint and is disabled by
+default:
+
+```python
+stt = STT(
+    api_key="YOUR_GROQ_API_KEY",
+    vad=True,
+    format=True,
+    format_model="openai/gpt-oss-120b",
+    format_base_url="https://api.groq.com/openai/v1",
+    # format_api_key defaults to api_key when omitted
+)
+text = stt.listen()
+```
+
+Formatting requires network access to a compatible endpoint and receives the
+raw transcript after transcription; it does not receive audio.
+
 Voxora does not include Wayland, GTK, clipboard, keyboard simulation, IPC, or
 desktop notification functionality. It is not production-ready and is not
 published on PyPI.

@@ -19,6 +19,7 @@ from .exceptions import (
     VoxoraError,
 )
 from .audio import AudioRecorder, AudioResult
+from .formatter import TranscriptFormatter
 from .groq import GroqTranscriber
 
 
@@ -90,6 +91,8 @@ class STT:
         self._active_session = None
         self._groq_transcriber = None
         self._groq_init_lock = threading.Lock()
+        self._formatter = None
+        self._formatter_init_lock = threading.Lock()
 
     def listen(self) -> str:
         """Record with VAD and reach the Phase 3 transcription boundary."""
@@ -241,8 +244,19 @@ class STT:
                 if self._groq_transcriber is None:
                     self._groq_transcriber = GroqTranscriber(self.config.api_key)
         transcriber = self._groq_transcriber
-        return transcriber.transcribe(
+        transcript = transcriber.transcribe(
             result,
             model=self.config.stt_model,
             language=self.config.language,
         )
+        if not self.config.format:
+            return transcript
+        if self._formatter is None:
+            with self._formatter_init_lock:
+                if self._formatter is None:
+                    self._formatter = TranscriptFormatter(
+                        self.config.format_api_key,
+                        self.config.format_base_url,
+                        self.config.format_model,
+                    )
+        return self._formatter.format(transcript)
