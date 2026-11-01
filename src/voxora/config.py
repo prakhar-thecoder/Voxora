@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from typing import Optional
 
-from .stt import ConfigurationError
+from .exceptions import ConfigurationError
 
 
 @dataclass(frozen=True)
@@ -15,8 +16,8 @@ class STTConfig:
     api_key: str
     stt_model: str
     format: bool
-    format_base_url: str
-    format_model: str
+    format_base_url: Optional[str]
+    format_model: Optional[str]
     format_api_key: Optional[str]
     language: Optional[str]
     vad: bool
@@ -45,9 +46,15 @@ def _bool(value: object, name: str) -> bool:
 def _positive(value: object, name: str, *, allow_none: bool = False) -> Optional[float]:
     if value is None and allow_none:
         return None
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
         suffix = " or None" if allow_none else ""
         raise ConfigurationError(f"{name} must be positive{suffix}")
+    return float(value)
+
+
+def _non_negative(value: object, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+        raise ConfigurationError(f"{name} must be a finite, non-negative number")
     return float(value)
 
 
@@ -59,10 +66,13 @@ def validate_config(**values: object) -> STTConfig:
     api_key = _non_empty(values["api_key"], "api_key")
     stt_model = _non_empty(values["stt_model"], "stt_model")
     formatting = _bool(values["format"], "format")
-    format_base_url = _non_empty(values["format_base_url"], "format_base_url")
-    format_model = _non_empty(values["format_model"], "format_model")
+    format_base_url = values["format_base_url"]
+    format_model = values["format_model"]
+    if formatting:
+        format_base_url = _non_empty(format_base_url, "format_base_url")
+        format_model = _non_empty(format_model, "format_model")
     format_api_key = values["format_api_key"]
-    if format_api_key is not None:
+    if formatting and format_api_key is not None:
         format_api_key = _non_empty(format_api_key, "format_api_key")
     if formatting and format_api_key is None:
         format_api_key = api_key
@@ -78,14 +88,13 @@ def validate_config(**values: object) -> STTConfig:
 
     silence_duration = _positive(values["silence_duration"], "silence_duration")
     pre_speech_duration = values["pre_speech_duration"]
-    if isinstance(pre_speech_duration, bool) or not isinstance(pre_speech_duration, (int, float)) or pre_speech_duration < 0:
-        raise ConfigurationError("pre_speech_duration must be non-negative")
+    pre_speech_duration = _non_negative(pre_speech_duration, "pre_speech_duration")
 
     sample_rate = values["sample_rate"]
-    if sample_rate not in (8000, 16000, 32000, 48000):
+    if isinstance(sample_rate, bool) or not isinstance(sample_rate, int) or sample_rate not in (8000, 16000, 32000, 48000):
         raise ConfigurationError("sample_rate must be one of 8000, 16000, 32000, or 48000")
     frame_duration_ms = values["frame_duration_ms"]
-    if frame_duration_ms not in (10, 20, 30):
+    if isinstance(frame_duration_ms, bool) or not isinstance(frame_duration_ms, int) or frame_duration_ms not in (10, 20, 30):
         raise ConfigurationError("frame_duration_ms must be 10, 20, or 30")
 
     max_duration = _positive(values["max_recording_duration"], "max_recording_duration", allow_none=True)
@@ -115,7 +124,7 @@ def validate_config(**values: object) -> STTConfig:
         vad=vad,
         vad_mode=vad_mode,
         silence_duration=silence_duration,
-        pre_speech_duration=float(pre_speech_duration),
+        pre_speech_duration=pre_speech_duration,
         sample_rate=sample_rate,
         frame_duration_ms=frame_duration_ms,
         max_recording_duration=max_duration,

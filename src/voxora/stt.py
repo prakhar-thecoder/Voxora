@@ -8,33 +8,15 @@ import threading
 from enum import Enum, auto
 from typing import Optional
 
-
-class VoxoraError(Exception):
-    """Base class for errors owned by Voxora."""
-
-
-class ConfigurationError(VoxoraError):
-    """The STT configuration is invalid."""
-
-
-class RecordingStateError(VoxoraError):
-    """An operation is incompatible with the current recording state."""
-
-
-class AudioCaptureError(VoxoraError):
-    """Audio capture failed."""
-
-
-class NoSpeechError(VoxoraError):
-    """No usable speech was captured."""
-
-
-class RecordingTimeoutError(VoxoraError):
-    """Recording exceeded a configured timeout."""
-
-
-class FormattingError(VoxoraError):
-    """The formatter returned an invalid result."""
+from .exceptions import (
+    AudioCaptureError,
+    ConfigurationError,
+    FormattingError,
+    NoSpeechError,
+    RecordingStateError,
+    RecordingTimeoutError,
+    VoxoraError,
+)
 
 
 class _State(Enum):
@@ -91,7 +73,7 @@ class STT:
             speech_start_timeout=speech_start_timeout,
             log_level=log_level,
         )
-        self._logger = logging.getLogger("voxora")
+        self._logger = logging.getLogger(f"voxora.stt.{id(self)}")
         self._logger.setLevel(self.config.log_level)
         self._state = _State.IDLE
         self._state_lock = threading.RLock()
@@ -109,7 +91,6 @@ class STT:
         with self._state_lock:
             if self._state in (_State.RECORDING, _State.PROCESSING):
                 raise RecordingStateError("a recording is already active")
-            self._state = _State.RECORDING
         raise NotImplementedError("microphone recording will be implemented in a later phase")
 
     def stop(self) -> str:

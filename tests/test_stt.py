@@ -3,6 +3,7 @@ import logging
 import pytest
 
 from voxora import ConfigurationError, RecordingStateError, STT
+from voxora.stt import _State
 
 
 def test_public_import_and_defaults(monkeypatch):
@@ -43,8 +44,32 @@ def test_audio_configuration_validation(monkeypatch, kwargs):
         STT(**kwargs)
 
 
+@pytest.mark.parametrize("name", ["silence_duration", "pre_speech_duration", "max_recording_duration", "speech_start_timeout"])
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_durations_rejected(monkeypatch, name, value):
+    monkeypatch.setenv("GROQ_API_KEY", "key")
+    with pytest.raises(ConfigurationError):
+        STT(**{name: value})
+
+
+@pytest.mark.parametrize("name", ["sample_rate", "frame_duration_ms"])
+@pytest.mark.parametrize("value", [16000.0, True])
+def test_non_integer_audio_settings_rejected(monkeypatch, name, value):
+    monkeypatch.setenv("GROQ_API_KEY", "key")
+    with pytest.raises(ConfigurationError):
+        STT(**{name: value})
+
+
+def test_optional_timeouts_preserve_none(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "key")
+    stt = STT(max_recording_duration=None, speech_start_timeout=None)
+    assert stt.config.max_recording_duration is None
+    assert stt.config.speech_start_timeout is None
+
+
 def test_formatter_key_fallback_and_validation(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "key")
+    assert STT(format=False, format_base_url="", format_model="", format_api_key="").config.format_model == ""
     assert STT(format=True).config.format_api_key == "key"
     with pytest.raises(ConfigurationError):
         STT(format=True, format_model="")
@@ -67,18 +92,35 @@ def test_workflow_restrictions(monkeypatch):
         manual.stop()
 
 
-def test_repeated_start_rejected(monkeypatch):
+def test_start_does_not_change_state(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "key")
     stt = STT(vad=False)
     with pytest.raises(NotImplementedError):
         stt.start()
+    assert stt._state is _State.IDLE
+    with pytest.raises(RecordingStateError):
+        stt.stop()
+
+
+def test_active_state_rejects_repeated_start_and_stop_is_unimplemented(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "key")
+    stt = STT(vad=False)
+    stt._state = _State.RECORDING
     with pytest.raises(RecordingStateError):
         stt.start()
+    with pytest.raises(NotImplementedError):
+        stt.stop()
 
 
-def test_named_logger_does_not_configure_root(monkeypatch):
+def test_instance_logger_does_not_configure_root_or_package_logger(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "key")
     root_handlers = list(logging.getLogger().handlers)
-    STT(log_level=logging.INFO)
-    assert logging.getLogger("voxora").level == logging.INFO
+    package_logger = logging.getLogger("voxora")
+    package_level = package_logger.level
+    first = STT(log_level=logging.INFO)
+    second = STT(log_level=logging.DEBUG)
+    assert first._logger.name.startswith("voxora.stt.")
+    assert first._logger.level == logging.INFO
+    assert second._logger.level == logging.DEBUG
+    assert package_logger.level == package_level
     assert list(logging.getLogger().handlers) == root_handlers

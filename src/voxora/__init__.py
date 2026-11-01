@@ -1,15 +1,15 @@
 """Public package interface for Voxora."""
 
-from .stt import (
+from .exceptions import (
     AudioCaptureError,
     ConfigurationError,
     FormattingError,
     NoSpeechError,
     RecordingStateError,
     RecordingTimeoutError,
-    STT,
     VoxoraError,
 )
+from .stt import STT
 
 __all__ = [
     "STT",
