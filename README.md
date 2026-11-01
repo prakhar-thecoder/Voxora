@@ -1,85 +1,134 @@
 # Voxora
 
-Voxora is a standalone, microphone-based Python speech-to-text SDK. Its
-intended public class is `voxora.STT`.
+**A lightweight, microphone-based speech-to-text SDK for Python.**
 
-From a Voxora source checkout, install with `pip install .` and configure a
-Groq API key explicitly or with the `GROQ_API_KEY` environment variable. This
-is not a PyPI installation instruction; Voxora is not published on PyPI.
+Voxora makes it easy to add speech recognition to Python applications with automatic voice detection, manual recording controls, and optional AI-powered transcript formatting.
+
+## Features
+
+- **Automatic recording:** Detect speech and automatically stop after silence.
+- **Manual recording:** Control recording with `start()` and `stop()`.
+- **Speech-to-text:** Transcribe audio using Groq Whisper.
+- **Transcript formatting:** Optionally improve punctuation, capitalization, and paragraph structure.
+- **In-memory processing:** Audio is processed in memory without writing recordings to disk.
+- **Simple API:** A single `STT` class for both recording modes.
+
+## Installation
 
 ```bash
-export GROQ_API_KEY="your-key"
+pip install voxora
 ```
 
-Phase 2 implements microphone capture, in-memory PCM buffering, WebRTC VAD,
-pre-speech buffering, silence detection, timeouts, and manual recording
-concurrency. Groq Whisper transcription is now integrated; formatting remains
-deferred.
+Set your Groq API key:
 
-VAD-enabled `listen()` waits for speech, retains the configured pre-speech
-buffer, and stops after configured silence. `speech_start_timeout` raises
-`NoSpeechError` when speech never starts. `max_recording_duration` stops a
-recording without treating the duration limit itself as an error when usable
-audio was captured. Manual `start()` runs capture in a background thread;
-`stop()` signals and joins it before requesting transcription.
+```bash
+export GROQ_API_KEY="your-groq-api-key"
+```
 
-The default transcription model is `whisper-large-v3-turbo`. Configure a
-different supported model and optional ISO-639-1 language hint with
-`stt_model` and `language`. Audio is sent to Groq's cloud transcription API;
-Voxora is not an offline transcription engine.
+Voxora requires Python 3.10 or newer and microphone/audio dependencies. PyAudio may require platform-specific system libraries.
 
-Empty or malformed provider response text raises `TranscriptionError`.
-Authentication, network, rate-limit, timeout, and other provider exceptions
-may propagate from the Groq SDK with their original details.
+## Quick Start
 
-Audio is kept in memory as mono 16-bit PCM and is never exposed by the public
-API or written to disk. PyAudio and WebRTC VAD are required system/runtime
-dependencies; unit tests use fakes and do not require a physical microphone.
-The internal WAV converter preserves PCM metadata and accepts standard
-1-to-4-byte PCM sample widths; the microphone recorder currently emits mono,
-16-bit PCM.
-The `webrtcvad-wheels` distribution provides the `webrtcvad` import and its
-current wheel release requires Python 3.10 or newer.
+### Automatic recording (VAD)
 
-`log_level` applies only to the instance's `voxora.stt.<instance>` child
-logger. Voxora does not configure the root logger, install handlers, or change
-application logging configuration; multiple `STT` instances can therefore
-use different levels without affecting one another.
+Voxora automatically detects speech and stops recording after the configured silence duration.
 
 ```python
 from voxora import STT
 
-stt = STT(engine="groq", api_key="YOUR_GROQ_API_KEY", vad=True)
+stt = STT(
+    api_key="YOUR_GROQ_API_KEY",
+    vad=True
+)
+
 text = stt.listen()
+
+print(text)
 ```
 
-For manually controlled recording:
+### Manual recording
+
+For applications that need explicit recording controls:
 
 ```python
-stt = STT(engine="groq", api_key="YOUR_GROQ_API_KEY", vad=False)
+from voxora import STT
+
+stt = STT(
+    api_key="YOUR_GROQ_API_KEY",
+    vad=False
+)
+
 stt.start()
+
+input("Press Enter to stop recording...")
+
 text = stt.stop()
+
+print(text)
 ```
 
-Optional formatting can be enabled after Groq transcription. The formatter
-uses the configured compatible chat-completions endpoint and is disabled by
-default:
+## Transcript Formatting
+
+Voxora can optionally format transcribed text using a compatible chat-completions API.
+
+Formatting improves punctuation, capitalization, and paragraph breaks while preserving the original spoken words and meaning.
 
 ```python
+from voxora import STT
+
 stt = STT(
     api_key="YOUR_GROQ_API_KEY",
     vad=True,
     format=True,
     format_model="openai/gpt-oss-120b",
-    format_base_url="https://api.groq.com/openai/v1",
-    # format_api_key defaults to api_key when omitted
+    format_base_url="https://api.groq.com/openai/v1"
 )
+
 text = stt.listen()
+
+print(text)
 ```
 
-Formatting requires network access to a compatible endpoint and receives the
-raw transcript after transcription; it does not receive audio.
+Formatting is disabled by default. The formatter receives the transcript after speech recognition; it does not receive the audio.
 
-Voxora does not include Wayland, GTK, clipboard, keyboard simulation, IPC, or
-desktop notification functionality. It is not production-ready and is not
-published on PyPI.
+## Configuration
+
+| Parameter | Description |
+|---|---|
+| `api_key` | Groq API key. Defaults to `GROQ_API_KEY`. |
+| `stt_model` | Groq transcription model. |
+| `language` | Optional ISO-639-1 language hint. |
+| `vad` | Enables automatic voice activity detection. |
+| `vad_mode` | WebRTC VAD aggressiveness (0–3). |
+| `silence_duration` | Silence duration before automatic recording stops. |
+| `pre_speech_duration` | Audio retained before speech detection. |
+| `max_recording_duration` | Maximum recording duration. |
+| `speech_start_timeout` | Maximum wait for speech to begin. |
+| `format` | Enables optional transcript formatting. |
+| `format_base_url` | Compatible formatting API endpoint. |
+| `format_model` | Formatting model. |
+| `format_api_key` | Formatting API key; defaults to `api_key`. |
+
+## Error Handling
+
+Voxora exposes exceptions for configuration, recording, transcription, and formatting failures.
+
+Provider authentication, network, rate-limit, and other API errors may propagate from the underlying SDK.
+
+## Requirements
+
+- Python 3.10+
+- PyAudio
+- WebRTC VAD
+- Groq API key
+- Internet connection for transcription and optional formatting
+
+Voxora uses Groq's cloud transcription API and is not an offline speech recognition engine.
+
+## License
+
+See [LICENSE](LICENSE).
+
+---
+
+**Voxora** — Speech recognition, made simple.

@@ -1,26 +1,41 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "voxora"
-version = "0.1.0"
-description = "A microphone-based Python speech-to-text SDK."
+version = "1.0.0"
+description = "A lightweight, microphone-based speech-to-text SDK for Python."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "LICENSE" }
-authors = [{ name = "Voxora contributors" }]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Prakhar Parikh" }
+]
+keywords = [
+    "speech-to-text",
+    "speech-recognition",
+    "voice-activity-detection",
+    "audio",
+    "microphone",
+    "groq",
+    "whisper",
+    "python-sdk"
+]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
 ]
 dependencies = [
     "PyAudio>=0.2.13",
     "webrtcvad-wheels>=2.0.14.post1",
     "groq>=0.31.0",
-    "openai>=1.0.0",
+    "openai>=2.31.0",
 ]
 
 [project.optional-dependencies]
