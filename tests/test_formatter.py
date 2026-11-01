@@ -64,11 +64,11 @@ def test_formatter_request_matches_waytype_payload():
 def test_formatter_client_uses_key_base_url_and_model(monkeypatch):
     calls = []
 
-    class FakeGroq:
+    class FakeOpenAI:
         def __init__(self, **kwargs):
             calls.append(kwargs)
 
-    monkeypatch.setattr("voxora.formatter.Groq", FakeGroq)
+    monkeypatch.setattr("voxora.formatter.OpenAI", FakeOpenAI)
     formatter = TranscriptFormatter("key", "https://example.test/v1", "model")
     assert calls == [{"api_key": "key", "base_url": "https://example.test/v1"}]
     assert formatter._model == "model"
